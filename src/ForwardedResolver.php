@@ -23,8 +23,8 @@ use Psr\Http\Message\ServerRequestInterface;
  *    client always resolves to the same string.
  *  - the scheme and host get only resolved when a client ip was resolved: the entry at the same position, if the
  *    header has as many entries as the `for` header (proxies appending to all of them), the last (the one the nearest
- *    proxy set) otherwise. The scheme gets lowercased and must be `http` or `https`, the host must be a syntactically
- *    valid host (with an optional port from 1 to 65535), everything else resolves null.
+ *    proxy set) otherwise. The scheme gets lowercased and must be `http` or `https`, the host gets lowercased and must
+ *    be a syntactically valid host (with an optional port from 1 to 65535), everything else resolves null.
  */
 final class ForwardedResolver implements ForwardedResolverInterface
 {
@@ -307,6 +307,7 @@ final class ForwardedResolver implements ForwardedResolverInterface
         $valid = (null === $port || ($port >= self::MIN_PORT && $port <= self::MAX_PORT))
             && ('' === $ipv6 || false !== filter_var($ipv6, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6));
 
-        return $valid ? $entry : null;
+        // hosts are case insensitive (rfc 3986), so that the same host always resolves to the same string
+        return $valid ? strtolower($entry) : null;
     }
 }

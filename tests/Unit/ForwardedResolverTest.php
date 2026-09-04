@@ -418,6 +418,33 @@ final class ForwardedResolverTest extends TestCase
         yield 'hostname with the lowest port' => ['example.com:1'];
     }
 
+    #[DataProvider('provideWithMixedCaseHostEntriesTheLowercasedHostCases')]
+    public function testWithMixedCaseHostEntriesTheLowercasedHost(string $host, string $expectedHost): void
+    {
+        $resolver = new ForwardedResolver([self::PROXY_CIDR]);
+
+        self::assertEquals(
+            new TrustedProxyAttributes(self::CLIENT_IP, 'https', $expectedHost),
+            $resolver->resolve(self::createRequest([
+                'X-Forwarded-For' => self::CLIENT_IP,
+                'X-Forwarded-Proto' => 'https',
+                'X-Forwarded-Host' => $host,
+            ]))
+        );
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: string}>
+     */
+    public static function provideWithMixedCaseHostEntriesTheLowercasedHostCases(): iterable
+    {
+        yield 'uppercase hostname' => ['EXAMPLE.COM', 'example.com'];
+
+        yield 'mixed case hostname with port' => ['Example.Com:8443', 'example.com:8443'];
+
+        yield 'uppercase bracketed ipv6' => ['[2001:DB8::1]', '[2001:db8::1]'];
+    }
+
     public function testWithoutRemoteAddressNothingGetsResolved(): void
     {
         $resolver = new ForwardedResolver([self::PROXY_CIDR]);

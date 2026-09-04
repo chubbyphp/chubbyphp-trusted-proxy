@@ -92,14 +92,16 @@ not a valid ip.
 
 The scheme and host get only resolved when a client ip was resolved: the entry at the same position, if the header has
 as many entries as the `X-Forwarded-For` header (proxies appending to all of them), the last (the one the nearest proxy
-set) otherwise. The scheme gets lowercased and must be `http` or `https`, the host must be a syntactically valid host
-(a hostname, an ipv4 or a bracketed ipv6, each with an optional port from 1 to 65535), everything else resolves `null`.
+set) otherwise. The scheme gets lowercased and must be `http` or `https`, the host gets lowercased and must be a
+syntactically valid host (a hostname, an ipv4 or a bracketed ipv6, each with an optional port from 1 to 65535),
+everything else resolves `null`.
 
 ### Security
 
 The trust is anchored at the address of the connection, as `remoteAddress` attribute (set by the server or a middleware
 in front, a port gets stripped) or as `REMOTE_ADDR` server param (as set by php-fpm, apache, ...), the attribute wins
-over the server param: a connection from outside the trusted ranges counts as the client itself, its address is the
+over the server param, so nothing else may set it (run the middleware before the router, a route placeholder
+`{remoteAddress}` would let the client choose it): a connection from outside the trusted ranges counts as the client itself, its address is the
 `clientIp` and the headers get ignored. An address which is not a valid ip (junk, a non string) resolves nothing, the
 middleware never falls back to the headers. A request without any address of the connection resolves nothing (fail
 closed), as the middleware cannot verify that the last hop was a trusted proxy. If the server never provides it (some
