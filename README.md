@@ -101,12 +101,12 @@ everything else resolves `null`.
 The trust is anchored at the address of the connection, as `remoteAddress` attribute (set by the server or a middleware
 in front, a port gets stripped) or as `REMOTE_ADDR` server param (as set by php-fpm, apache, ...), the attribute wins
 over the server param, so nothing else may set it (run the middleware before the router, a route placeholder
-`{remoteAddress}` would let the client choose it): a connection from outside the trusted ranges counts as the client itself, its address is the
-`clientIp` and the headers get ignored. An address which is not a valid ip (junk, a non string) resolves nothing, the
-middleware never falls back to the headers. A request without any address of the connection resolves nothing (fail
-closed), as the middleware cannot verify that the last hop was a trusted proxy. If the server never provides it (some
-runtimes build the request without server params), disable the check explicitly, the server must then not be reachable
-except through the proxies:
+`{remoteAddress}` would let the client choose it): a connection from outside the trusted ranges counts as the client
+itself, its address is the `clientIp` and the headers get ignored. An address which is not a valid ip (junk, a non
+string) resolves nothing, the middleware never falls back to the headers. A request without any address of the
+connection resolves nothing (fail closed), as the middleware cannot verify that the last hop was a trusted proxy. If
+the server never provides it (some runtimes build the request without server params), disable the check explicitly,
+the server must then not be reachable except through the proxies:
 
 ```php
 new ForwardedResolver(['10.0.0.0/8'], requireRemoteAddress: false);
@@ -133,8 +133,9 @@ headers (or single value ones like `X-Real-IP`, see below): if the proxies send 
 
 ### Headers
 
-The second argument replaces the header names (`for` is required, the others are optional, `null` disables them),
-useful for a proxy setting a single value header like `X-Real-IP`:
+The second argument replaces the header names (each one optional, `null` disables `proto` and `host`, `for` cannot be
+disabled, an invalid header name throws an `InvalidArgumentException`), useful for a proxy setting a single value
+header like `X-Real-IP`:
 
 ```php
 use Chubbyphp\TrustedProxy\ForwardedHeaders;
