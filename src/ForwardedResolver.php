@@ -10,9 +10,11 @@ use Psr\Http\Message\ServerRequestInterface;
  * Resolves the client ip, scheme and host of a request out of the forwarded headers:
  *  - the address of the connection (the `remoteAddress` attribute, or the `REMOTE_ADDR` server param, as set by the
  *    server, a port gets stripped) anchors the trust: a connection from outside the trusted ranges is the client
- *    itself, its address is the client ip and the headers get ignored. Without any address, nothing gets resolved
- *    (fail closed), unless the resolver got created with `requireRemoteAddress: false`, in which case the last hop
- *    counts as trusted (the server must then not be reachable except through the proxies).
+ *    itself, its address is the client ip and the headers get ignored. An address which is not a valid ip (junk, a
+ *    non string) resolves nothing, never a fallback to the headers, as they cannot be trusted without knowing the
+ *    connection either. Without any address (null), nothing gets resolved (fail closed), unless the resolver got
+ *    created with `requireRemoteAddress: false`, in which case the last hop counts as trusted (the server must then
+ *    not be reachable except through the proxies).
  *  - the entries of the `for` header get walked from the right (the entries as appended by the proxies, the nearest
  *    one last), skipping the ones within the trusted proxies ips / cidrs (e.g. `['10.0.0.0/8', '::1']`, ipv4 mapped
  *    ipv6 addresses match ipv4 subnets), the first untrusted one is the client ip, if it is a valid ip. Only trusted
@@ -68,7 +70,8 @@ final class ForwardedResolver implements ForwardedResolverInterface
     {
         $remoteAddress = $this->remoteAddress($request);
 
-        // the client connected directly: its address is the client ip, the headers get ignored
+        // set but not a trusted proxy: the client connected directly (its address is the client ip), or a broken
+        // address which resolves nothing, either way the headers get ignored
         if (null !== $remoteAddress && !$this->isTrustedProxy($remoteAddress)) {
             return new TrustedProxyAttributes(self::asIp($remoteAddress));
         }
@@ -221,8 +224,9 @@ final class ForwardedResolver implements ForwardedResolverInterface
     }
 
     /**
-     * The address of the connection, a port gets stripped (`10.0.0.1:54321`, `[::1]:54321`, as some servers provide
-     * it), so that it can be matched against the trusted proxies.
+     * The address of the connection, without a port, so that it can be matched against the trusted proxies. Null if
+     * there is none, a broken (non string) one counts as set: it is returned as an empty string, which is never a
+     * trusted proxy nor a valid ip, so that it resolves nothing instead of falling back to the headers.
      */
     private function remoteAddress(ServerRequestInterface $request): ?string
     {
@@ -230,16 +234,28 @@ final class ForwardedResolver implements ForwardedResolverInterface
             ?? $request->getServerParams()[self::REMOTE_ADDR_SERVER_PARAM]
             ?? null;
 
-        if (!\is_string($remoteAddress)) {
+        if (null === $remoteAddress) {
             return null;
         }
 
-        // `[ipv6]:port` or `ipv4:port`
-        if (1 === preg_match('/^(?:\[([^\]]+)\]|([^:]+)):\d+\z/', $remoteAddress, $matches)) {
-            return '' !== $matches[1] ? $matches[1] : $matches[2];
+        if (!\is_string($remoteAddress)) {
+            return '';
         }
 
-        return $remoteAddress;
+        return self::withoutPort($remoteAddress);
+    }
+
+    /**
+     * Strips the port some servers provide the address with (`10.0.0.1:54321`, `[::1]:54321`), everything else stays
+     * as it is.
+     */
+    private static function withoutPort(string $address): string
+    {
+        if (1 !== preg_match('/^(?:\[([^\]]+)\]|([^:]+)):\d+\z/', $address, $matches)) {
+            return $address;
+        }
+
+        return '' !== $matches[1] ? $matches[1] : $matches[2];
     }
 
     /**

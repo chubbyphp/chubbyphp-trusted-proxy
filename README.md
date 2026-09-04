@@ -40,7 +40,7 @@ A trusted proxy middleware for PSR 15: resolves the client ip, scheme and host f
 Through [Composer](http://getcomposer.org) as [chubbyphp/chubbyphp-trusted-proxy][1].
 
 ```sh
-composer require chubbyphp/chubbyphp-trusted-proxy "^1.0"
+composer require chubbyphp/chubbyphp-trusted-proxy "^1.1"
 ```
 
 ## Usage
@@ -85,9 +85,10 @@ that nothing set before it survives. A subnet matching every ip (`0.0.0.0/0`, `:
 every entry and never resolve anything, an empty list as well, as it would trust no entry and resolve the nearest proxy
 as client ip, the entries get trimmed. Ipv4 mapped ipv6 addresses (`::ffff:10.0.0.1`) match ipv4 subnets.
 
-The `clientIp` gets canonicalized (`::ffff:203.0.113.1` as `203.0.113.1`, `2001:db8:0:0::1` as `2001:db8::1`), so
-that the same client always resolves to the same string, no matter how a hop wrote it (rate limit keys, allowlists,
-logs).
+The `clientIp` gets canonicalized (lowercased and compressed, `2001:DB8:0:0::1` as `2001:db8::1`, ipv4 mapped ipv6
+addresses as ipv4, `::ffff:203.0.113.1` as `203.0.113.1`), so that the same client always resolves to the same string,
+no matter how a hop wrote it (rate limit keys, allowlists, logs). An ipv6 address with a zone id (`fe80::1%eth0`) is
+not a valid ip.
 
 The scheme and host get only resolved when a client ip was resolved: the entry at the same position, if the header has
 as many entries as the `X-Forwarded-For` header (proxies appending to all of them), the last (the one the nearest proxy
@@ -99,10 +100,11 @@ set) otherwise. The scheme gets lowercased and must be `http` or `https`, the ho
 The trust is anchored at the address of the connection, as `remoteAddress` attribute (set by the server or a middleware
 in front, a port gets stripped) or as `REMOTE_ADDR` server param (as set by php-fpm, apache, ...), the attribute wins
 over the server param: a connection from outside the trusted ranges counts as the client itself, its address is the
-`clientIp` and the headers get ignored. A request without any address of the connection resolves nothing (fail closed),
-as the middleware cannot verify that the last hop was a trusted proxy. If the server never provides it (some runtimes
-build the request without server params), disable the check explicitly, the server must then not be reachable except
-through the proxies:
+`clientIp` and the headers get ignored. An address which is not a valid ip (junk, a non string) resolves nothing, the
+middleware never falls back to the headers. A request without any address of the connection resolves nothing (fail
+closed), as the middleware cannot verify that the last hop was a trusted proxy. If the server never provides it (some
+runtimes build the request without server params), disable the check explicitly, the server must then not be reachable
+except through the proxies:
 
 ```php
 new ForwardedResolver(['10.0.0.0/8'], requireRemoteAddress: false);

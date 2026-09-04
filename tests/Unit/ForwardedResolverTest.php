@@ -195,6 +195,16 @@ final class ForwardedResolverTest extends TestCase
         yield 'ipv6 gets canonicalized' => [self::CLIENT_IP.', 2001:0db8:0000:0000:0000:0000:0000:0001', '2001:db8::1'];
 
         yield 'ipv4 mapped ipv6 client gets canonicalized' => ['::ffff:'.self::CLIENT_IP.', '.self::PROXY_IP, self::CLIENT_IP];
+
+        yield 'uppercase ipv6 gets canonicalized' => ['2001:DB8:0000:0:0::0001, '.self::PROXY_IP, '2001:db8::1'];
+
+        yield 'uppercase ipv4 mapped ipv6 gets canonicalized' => ['::FFFF:11.0.0.1, '.self::PROXY_IP, '11.0.0.1'];
+
+        yield 'uppercase ipv4 mapped ipv6 trusted' => [self::CLIENT_IP.', ::FFFF:'.self::PROXY_IP, self::CLIENT_IP];
+
+        yield 'ipv6 with zone id is not a valid ip' => ['fe80::1%eth0, '.self::PROXY_IP, null];
+
+        yield 'trusted ipv6 with zone id is not trusted' => [self::CLIENT_IP.', fd00::1%eth0', null];
     }
 
     public function testWithNonIpClientEntryTheOtherHeadersGetIgnored(): void
@@ -574,18 +584,50 @@ final class ForwardedResolverTest extends TestCase
         );
     }
 
-    public function testWithNonStringRemoteAddressNothingGetsResolved(): void
+    #[DataProvider('provideWithNonStringRemoteAddressNothingGetsResolvedCases')]
+    public function testWithNonStringRemoteAddressNothingGetsResolved(mixed $remoteAddress): void
+    {
+        // even with the address not required: a broken address is set, so there is no fallback to the headers
+        foreach ([true, false] as $requireRemoteAddress) {
+            $resolver = new ForwardedResolver([self::PROXY_CIDR], null, $requireRemoteAddress);
+
+            self::assertEquals(
+                new TrustedProxyAttributes(),
+                $resolver->resolve(self::createRequest(['X-Forwarded-For' => self::CLIENT_IP], ['remoteAddress' => $remoteAddress], []))
+            );
+
+            self::assertEquals(
+                new TrustedProxyAttributes(),
+                $resolver->resolve(self::createRequest(['X-Forwarded-For' => self::CLIENT_IP], [], ['REMOTE_ADDR' => $remoteAddress]))
+            );
+        }
+    }
+
+    /**
+     * @return iterable<string, array{0: mixed}>
+     */
+    public static function provideWithNonStringRemoteAddressNothingGetsResolvedCases(): iterable
+    {
+        yield 'int' => [1];
+
+        yield 'bool' => [true];
+
+        yield 'array' => [[self::PROXY_IP]];
+
+        yield 'object' => [(object) ['address' => self::PROXY_IP]];
+    }
+
+    public function testWithNullRemoteAddressAttributeTheServerParamGetsUsed(): void
     {
         $resolver = new ForwardedResolver([self::PROXY_CIDR]);
 
         self::assertEquals(
-            new TrustedProxyAttributes(),
-            $resolver->resolve(self::createRequest(['X-Forwarded-For' => self::CLIENT_IP], ['remoteAddress' => 1], []))
-        );
-
-        self::assertEquals(
-            new TrustedProxyAttributes(),
-            $resolver->resolve(self::createRequest(['X-Forwarded-For' => self::CLIENT_IP], [], ['REMOTE_ADDR' => 1]))
+            new TrustedProxyAttributes(self::CLIENT_IP),
+            $resolver->resolve(self::createRequest(
+                ['X-Forwarded-For' => self::CLIENT_IP],
+                ['remoteAddress' => null],
+                ['REMOTE_ADDR' => self::PROXY_IP]
+            ))
         );
     }
 
