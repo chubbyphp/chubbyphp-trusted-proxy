@@ -33,7 +33,7 @@ A trusted proxy middleware for PSR 15: resolves the client ip, scheme and host f
 
 ## Suggest
 
- * [chubbyphp/chubbyphp-laminas-config-factory][5]: ^1.5.2
+ * [chubbyphp/chubbyphp-laminas-config-factory][5]: ^1.5.3
 
 ## Installation
 
